@@ -1,0 +1,185 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#include "Assets/Shaders/HLSL/Quaternion.hlsl"
+#include "Assets/Shaders/HLSL/DistanceEstimators.hlsl"
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+float3 _CamPos;
+float4x4 _CameraToWorld;
+float screenWidth;
+float screenHeight;
+float fov;
+float4 c; //constant quaternion specifying Julia set
+float3 rotationAxis;
+float3 _SlicePlaneNormal;
+float sliceVal;
+float epsilon; //lower bound for intersection precision
+float delta; //normal estimation step
+float theta;
+int maxRaySteps; //max number of steps when raymarching
+int maxIterations; // max number of iterations when estimating distance
+float _EscapeRadius;
+float _BoundingRadius;
+float4 _BackgroundColor;
+float4 _FractalColorInner;
+float4 _FractalColorOuter;
+float4 _LightColor;
+float3 _LightPos;
+float _Specular;
+float _Diffuse;
+float _LightStepScale;
+float _LightSteps;
+float _Penumbra;
+float _ColorLerpFactor;
+float _PowVal;
+int fractalType;
+bool slice;
+
+float EstimateDistance(float3 pos, int type)
+{
+    switch(type)
+    {
+        case 0: return DEJulia(pos, maxIterations, rotationAxis, theta, c, _EscapeRadius);
+        case 1: return DEMandelbulb(pos, maxIterations, _EscapeRadius, _PowVal);
+        case 2: return max(DEJulia(pos, maxIterations, rotationAxis, theta, c, _EscapeRadius), DEMandelbulb(pos, maxIterations, _EscapeRadius, _PowVal));
+        default: return 0.0f;
+    }
+}
+
+float DistUntilPlane(float3 from, float3 dir, float3 p0, float3 n)
+{
+    return dot(p0 - from, n) / dot(dir, n);
+}
+
+float3 ApproximateNormals(float3 p, float delta)
+{
+    float3 n;
+    float3 deltaX = float3(delta, 0, 0);
+    float3 deltaY = float3(0, delta, 0);
+    float3 deltaZ = float3(0, 0, delta);
+    n.x = EstimateDistance(p + deltaX, fractalType) - EstimateDistance(p - deltaX, fractalType);
+    n.y = EstimateDistance(p + deltaY, fractalType) - EstimateDistance(p - deltaY, fractalType);
+    n.z = EstimateDistance(p + deltaZ, fractalType) - EstimateDistance(p - deltaZ, fractalType);
+
+    return normalize(n);
+}
+
+float ClarityFunction(float dist, float a, int d)
+{
+    return a * pow(dist, d);
+}
+
+float3 GetDistFractalColor(float3 p)
+{
+    float3 col1 = _FractalColorInner.rgb;
+    float3 col2 = _FractalColorOuter.rgb;
+    float dist = length(p);
+    float t = dist / _ColorLerpFactor;
+
+    return lerp(col1, col2, t);
+}
+
+//Phong shading, lightDir, vireDir and normal should already be normalized before passed in
+float3 Phong(float3 lightDir, float3 viewDir, float3 n, float3 p)
+{
+    float3 halfwayDir = normalize(lightDir + viewDir);
+    float3 col = GetDistFractalColor(p);
+    float3 diffuse = col * max(dot(lightDir, n), 0) * _Diffuse;
+    float3 specular = _LightColor.rgb * pow(max(dot(halfwayDir, n), 0), _Specular);
+
+    return diffuse + specular;
+}
+
+//Soft shadow function from https://iquilezles.org/articles/rmshadows/
+float SoftShadows(float3 from, float3 direction, float stepSize, int lightSteps, float penumFactor)
+{
+    float res = 1.0f;
+    float totalDistance = stepSize;
+
+    for(int i = 0; i < lightSteps; i++)
+    {
+        float3 p = from + totalDistance * direction;
+        float distance = EstimateDistance(p, fractalType);
+        if(distance < epsilon)
+        {
+            return 0.1f;
+        }
+        res = min(res, penumFactor*distance/totalDistance);
+        totalDistance += distance;
+    }
+
+    return res;
+}
+
+float3 RayDirection(float2 texCoord)
+{
+    //convert tex-coordinates  to NDC-space
+    float xndc = (texCoord.x + 0.5) / screenWidth;
+    float yndc = (texCoord.y + 0.5) / screenHeight;
+    //convert NDC-space to screen space
+    float xs = 2 * xndc - 1;
+    float ys = 1 - 2 * yndc;
+    //convert to camera space
+    float aspectRatio = screenWidth / screenHeight;
+    float xc = xs * aspectRatio * tan(fov / 2);
+    float yc = ys * tan(fov/2);
+
+    float3 dcam = normalize(float3(xc, yc, -1));
+    float3 dworld = normalize(mul((float3x3)_CameraToWorld, dcam));
+
+    return dworld;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    //variables used throughout main function
+    float3 p;
+    float distance;
+    float totalDistance;
+    float3 planeNormal;
+    float3 p0;
+    //Set initial ray parameters
+    float3 from = _CamPos;
+    float3 direction = RayDirection(id.xy);
+    //augment startpoint of raymarch if slicing the fractal
+    if(slice)
+    {
+        planeNormal = normalize(_SlicePlaneNormal);
+        p0 = sliceVal * planeNormal;
+        float distToPlane = DistUntilPlane(_CamPos, direction, p0, planeNormal);
+        from = from + distToPlane * direction;
+        float totalDistance = distToPlane;
+    }
+    else
+    {
+        float totalDistance = 0.0f;
+    }
+
+    float4 output = _BackgroundColor;
+
+    //Calculate fractal isosurface
+    for(int steps = 0; steps < maxRaySteps; steps++)
+    {
+        p = from + totalDistance * direction;
+        distance = EstimateDistance(p, fractalType);
+        totalDistance += distance;
+        epsilon = ClarityFunction(totalDistance, float(0.0001), 1);
+        if(distance < epsilon || distance> _BoundingRadius) break;
+    }
+    //Coloration
+    if(distance < epsilon)
+    {
+        float3 n = ApproximateNormals(p, delta);
+        float3 dirToLight = normalize(_LightPos - p);
+        float3 viewDir = normalize(_CamPos - p);
+        float minStep = epsilon * _LightStepScale; //Set this larger than epsilon so we don't immidiately bump into the fractal when calculating soft shadows
+        float3 color = Phong(dirToLight, viewDir, n, p) * SoftShadows(p, dirToLight, minStep, _LightSteps, _Penumbra);
+        output = float4(color, 0);
+    }
+
+    Result[id.xy] = output;
+}

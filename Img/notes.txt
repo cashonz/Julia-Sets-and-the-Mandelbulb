@@ -1,0 +1,12 @@
+pic 3: no banding for low amounts of iterations
+pic 5: introduced escape radius, can increase iterations
+pic 6: grainy look for finer details
+pic 8: still grainy for finer details, but clarityfunction remedied some issues. Normal steps also matter highly for finer details
+pic 9: also added ability to rotate fractal into complex plane, along with fractal slicing
+pic 11/12: Low resolution because I forgot to set window resolution correctly. Soft raymarched shadows
+pic 13: Difference julia/mandel - Julia:fixed c, start z = p. Mandel: varying z, start z = 0. Julia z^2 + c, mandel z^k + p
+pic 14: Can combine DE for interesting results
+pic 13/14/15: final images
+
+Want to playmore wth SDFs and IFS fractals, correct lighting for slicing fractals, supersampling, coloring, background
+Realized it would be better if I made my own engine, ran into issues with Unity's architecture when playing around  
