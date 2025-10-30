@@ -6,4 +6,4 @@
 
 ![alt text](https://github.com/cashonz/Julia-Sets-and-the-Mandelbulb/blob/main/Img/13_Mandelbulb_Higher_Resolution.PNG "Mandelbulb")
 ![alt text](https://github.com/cashonz/Julia-Sets-and-the-Mandelbulb/blob/main/Img/14_Combining_estimators.PNG "Intersection of mandelbulb and a Julia set")
-![alt text](https://github.com/cashonz/https://github.com/cashonz/Julia-Sets-and-the-Mandelbulb/blob/main/Img/15_Higher_Resolution_Julia.PNG "one Julia set")
+![alt text](github.com/cashonz/Julia-Sets-and-the-Mandelbulb/blob/main/Img/15_Higher_Resolution_Julia.PNG "one Julia set")
