@@ -1,6 +1,6 @@
 # Rendering 3D Julia Sets and the Mandelbulb
 
-### A real time ray marched fractal renderer implementation. Features ability to change fractal parameters, such as input Julia set, rotation into the complex plane, coloration and levels of details in real time. Also features normals based shading, along with ray marched soft shadows, and a controllable camera.
+### A real time ray marched fractal renderer implementation. Features ability to change fractal parameters, such as input Julia set, rotation into the complex plane, coloration, levels of details and slicing the fractal along a plane in real time. Also features normals based shading, along with ray marched soft shadows, and a controllable camera.
 
 ### Project [blog](https://cashonz.github.io/PortfolioWebsite/BlogFractal.html)
 
